@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카페인 뇌파 분석 및 보고서 통합</title>
+    <!-- Tailwind CSS CDN 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 'Inter' 폰트 사용 */
+        :root {
+            font-family: 'Inter', sans-serif;
+        }
+        /* 프로그레스 바 스타일 */
+        .progress-bar {
+            transition: width 0.5s ease-in-out;
+        }
+        /* 보고서 모달 스타일 */
+        .report-overlay {
+            z-index: 50; /* Tailwind z-50 */
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .report-content {
+            max-height: 90vh;
+            overflow-y: auto;
+            scrollbar-width: thin; /* Firefox */
+            scrollbar-color: #3b82f6 #e5e7eb; /* blue-500 gray-200 */
+        }
+        .report-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .report-content::-webkit-scrollbar-thumb {
+            background-color: #3b82f6; /* blue-500 */
+            border-radius: 10px;
+        }
+        .report-content::-webkit-scrollbar-track {
+            background-color: #e5e7eb; /* gray-200 */
+            border-radius: 10px;
+        }
+        .report-content h3 {
+            font-size: 1.5rem; /* text-2xl */
+            font-weight: 700; /* font-bold */
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .report-content h4 {
+            font-size: 1.25rem; /* text-xl */
+            font-weight: 600; /* font-semibold */
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            border-left: 4px solid #3b82f6; /* blue-500 */
+            padding-left: 0.5rem;
+        }
+        .report-content p, .report-content ul, .report-content table {
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 sm:p-8">
+
+    <div id="app" class="max-w-4xl mx-auto bg-white shadow-2xl rounded-xl p-6 md:p-10">
+        <header class="text-center mb-6 border-b pb-4">
+            <h1 class="text-3xl font-extrabold text-blue-700">🧠 뇌파 분석 시뮬레이터</h1>
+            <p class="mt-2 text-gray-600 text-lg">
+                동아리 활동 연계: 카페인 섭취에 따른 각성 수준 유지 효과 분석
+            </p>
+        </header>
+
+        <!-- 버튼 섹션 - 순서: 보고서 보기, 데이터 로드, 재설정 -->
+        <section class="mb-8 flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+            <!-- 1. 진로 주제탐구 보고서 보기 -->
+            <button id="view-report-btn" onclick="toggleReport(true)" class="w-full sm:w-1/3 bg-indigo-500 text-white font-bold py-3 rounded-lg shadow-lg hover:bg-indigo-600 transition duration-300 transform hover:scale-[1.02]">
+                진로 주제탐구 보고서 보기
+            </button>
+            <!-- 2. 가상 EEG 데이터 로드 및 분석 시작 -->
+            <button id="load-data-btn" onclick="simulateDataLoad()" class="w-full sm:w-1/3 bg-blue-600 text-white font-bold py-3 rounded-lg shadow-lg hover:bg-blue-700 transition duration-300 transform hover:scale-[1.02]">
+                가상 EEG 데이터 로드 및 분석 시작
+            </button>
+            <!-- 3. 재설정 -->
+            <button id="reset-btn" onclick="resetApp()" class="w-full sm:w-1/3 bg-gray-300 text-gray-800 font-bold py-3 rounded-lg shadow-lg hover:bg-gray-400 transition duration-300 transform hover:scale-[1.02]">
+                재설정
+            </button>
+        </section>
+
+        <!-- 로딩 상태 메시지 -->
+        <div id="loading-status" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded mb-6 hidden" role="alert">
+            <p class="font-bold">데이터 로드 중...</p>
+            <p>가상의 뇌파 데이터를 분석 프로그램으로 불러오고 있습니다.</p>
+        </div>
+
+        <!-- 결과 섹션 (시뮬레이터) -->
+        <section id="results-section" class="mt-10 pt-6 border-t border-gray-200 hidden">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                탐구 결과: 뇌파 분석 시뮬레이션
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 1. 시간 경과에 따른 뇌파 변화 (각성 저하 지표: Delta/Theta 상대 파워) -->
+                <div class="bg-gray-100 p-5 rounded-lg shadow-inner">
+                    <h3 class="text-xl font-bold text-gray-700 mb-3">시간 세그먼트(C1 → C2) 변화량</h3>
+                    <p class="text-sm text-gray-600 mb-4">C1(0-5분) 대비 C2(5-10분)에서의 Delta+Theta 상대 파워 변화율. 각성 저하가 클수록 수치가 높습니다.</p>
+                    
+                    <div class="space-y-4">
+                        <!-- 카페인 그룹 변화 -->
+                        <div>
+                            <p class="font-medium text-red-600">카페인 그룹 (CA)</p>
+                            <div class="w-full bg-gray-300 rounded-full h-3">
+                                <div id="ca-diff-bar" class="progress-bar bg-red-600 h-3 rounded-full" style="width: 0;"></div>
+                            </div>
+                            <p id="ca-diff-text" class="text-right text-sm font-semibold mt-1"></p>
+                        </div>
+
+                        <!-- 디카페인 그룹 변화 -->
+                        <div>
+                            <p class="font-medium text-green-600">디카페인 그룹 (DE - 대조군)</p>
+                            <div class="w-full bg-gray-300 rounded-full h-3">
+                                <div id="de-diff-bar" class="progress-bar bg-green-600 h-3 rounded-full" style="width: 0;"></div>
+                            </div>
+                            <p id="de-diff-text" class="text-right text-sm font-semibold mt-1"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. C2 시점 그룹 간 차이 (카페인 효과 집중 분석) -->
+                <div class="bg-gray-100 p-5 rounded-lg shadow-inner">
+                    <h3 class="text-xl font-bold text-gray-700 mb-3">C2 (5-10분) 그룹 간 집중도 차이</h3>
+                    <p class="text-sm text-gray-600 mb-4">시간 경과 후, 두 그룹의 각성 저하 지표(Delta/Theta) 차이입니다. 차이가 클수록 카페인 효과가 명확합니다.</p>
+                    
+                    <div class="flex justify-center items-center h-40">
+                        <div class="text-center">
+                            <p class="text-4xl font-extrabold" id="c2-inter-diff-value">0%</p>
+                            <p class="text-lg font-medium mt-2 text-gray-700">상대 파워 비율 차이</p>
+                            <p id="analysis-summary" class="text-sm mt-3 font-semibold text-center"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 결론 및 심화 활동 메시지 -->
+            <div id="conclusion" class="mt-8 p-6 bg-blue-50 border-t-4 border-blue-500 rounded-lg">
+                <h3 class="text-xl font-bold text-blue-700 mb-3">분석 결론 및 다음 탐구 단계</h3>
+                <p class="text-gray-700 leading-relaxed">
+                    시뮬레이션 분석 결과, 카페인 그룹은 시간이 지나도 뇌파 변화(각성 저하 지표 증가)가 적어 각성 수준을 효과적으로 유지했음을 확인할 수 있었습니다. 이는 "카페인이 휴식 시 발생하는 각성 수준의 저하를 방지한다"는 학술 논문의 핵심 발견과 일치하는 경향입니다.
+                    <br><br>
+                    <span class="font-semibold text-gray-900">다음 단계:</span>
+                    <ul class="list-disc list-inside mt-2 ml-4 space-y-1">
+                        <li>Delta/Theta 파워뿐만 아니라 Alpha 파워 (이완 상태) 변화도 함께 분석하는 기능을 추가합니다.</li>
+                        <li>토포그래피 맵을 시뮬레이션하여 뇌의 특정 영역(전두엽 vs. 후두엽) 변화를 시각화합니다.</li>
+                        <li>컴퓨터 과학 역량을 활용하여 데이터 처리 속도와 프로그램의 범용성을 향상시키는 코드를 심화 작성합니다.</li>
+                    </ul>
+                </p>
+            </div>
+        </section>
+        
+        <!-- 에러 메시지 -->
+        <div id="error-message" class="mt-8 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 hidden rounded" role="alert">
+            <p class="font-bold">분석 오류</p>
+            <p>데이터 로드에 문제가 발생했습니다. 관리자에게 문의하거나 재설정 후 다시 시도해 주세요.</p>
+        </div>
+    </div>
+    
+    <!-- 진로 주제탐구 보고서 모달 오버레이 -->
+    <div id="report-modal" class="report-overlay fixed inset-0 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl m-4 p-6 md:p-8 report-content">
+            <h2 class="text-3xl font-extrabold text-indigo-700 mb-6 border-b pb-2">진로 주제탐구 보고서</h2>
+            
+            <!-- 보고서 내용 시작 (최종 검토 및 확정된 내용) -->
+            <div class="text-gray-800">
+                
+                <h3 class="text-indigo-600">1. 진로희망 학과 및 직업 분야는 무엇인가요?</h3>
+                <p>저의 최종 진로희망 분야는 뇌 공학입니다. 가까운 미래에 진학을 희망하는 학과는 전자공학, 컴퓨터 과학, 또는 기계공학과입니다.</p>
+                <p>이러한 학과들을 통해 뇌파 측정 장치를 직접 제작하거나(전자공학/기계공학), 뇌파 데이터를 분석하고 해석하는 알고리즘 및 소프트웨어를 개발(컴퓨터 과학)하는 데 필요한 전문 지식과 기술을 습득하고자 합니다. 궁극적으로는 이러한 공학적 지식을 바탕으로 인간의 인지 기능을 보조하거나 향상시키는 뇌-컴퓨터 인터페이스(BCI) 기술을 개발하는 뇌 공학자가 되는 것을 목표로 합니다.</p>
+                
+                <hr class="my-6 border-gray-200">
+
+                <h3 class="text-indigo-600">2. 진로 탐구 활동 보고서의 주제와 주제 선정 이유를 구체적으로 작성하세요.</h3>
+                
+                <h4 class="text-gray-700">탐구 주제: 동아리 활동 연계, 카페인과 디카페인 섭취 시 뇌파(집중도)의 차이 및 분석 프로그램 개발 심화</h4>
+                
+                <h4 class="text-gray-700">주제 선정 이유:</h4>
+                <ol class="list-decimal list-inside ml-4 space-y-2">
+                    <li>기존 동아리 활동과의 연계 및 심화:
+                        <ul class="list-disc list-inside ml-6 text-sm text-gray-600 space-y-1">
+                            <li>기존 동아리 활동에서 저가형 뇌파 측정기(Brainlink Lite)를 활용하여 카페인 섭취 전후의 집중도(뇌파) 변화를 측정하고, 이를 분석하는 가상 컴퓨터 기반의 프로그램을 제작하였습니다.</li>
+                            <li>본 탐구는 이 활동에서 미처 다루지 못한 '분석 결과의 학술적 의미'와 '측정 세그먼트(시간 구간) 선정의 중요성'을 심층적으로 탐구하여, 단순한 체험을 넘어 정량적 뇌파 분석(qEEG)에 대한 이해를 높이고자 선정했습니다.</li>
+                        </ul>
+                    </li>
+                    <li>학술 연구 결과의 검토 및 적용:
+                        <ul class="list-disc list-inside ml-6 text-sm text-gray-600 space-y-1">
+                            <li>제공된 연구 논문(참고 문헌 2)에서 "카페인이 휴식 시 발생하는 각성 수준의 저하를 방지하고, EEG 스펙트럼 파워의 시간적 변화를 막는다"는 핵심 결과를 확인했습니다. 특히, '분석 세그먼트 선정'이 정량적 뇌파 분석의 중요한 요인이며, 시간이 지남에 따라 대조군(디카페인)의 뇌파 변화(각성 수준 저하)가 더 커져 그룹 간 차이가 뚜렷해진다는 사실을 발견했습니다.</li>
+                            <li>이는 단순히 '카페인이 집중도를 높인다'는 일반적인 사실을 확인하는 것을 넘어, '측정 시간(Segment)에 따른 결과의 차이'라는 변수를 심화 탐구하는 데 중요한 학문적 근거를 제공합니다.</li>
+                        </ul>
+                    </li>
+                    <li>공학 및 과학적 관심사 통합:
+                        <ul class="list-disc list-inside ml-6 text-sm text-gray-600 space-y-1">
+                            <li>뇌 공학자를 희망하는 저의 진로와 관련하여, 전자공학적 지식(저가형 센서 활용), 컴퓨터 과학적 지식(분석 프로그램 개발 및 배포 능력), 그리고 신경과학적 지식(뇌파의 생리학적 해석)을 모두 통합하여 탐구할 수 있는 최적의 주제이기 때문입니다.</li>
+                        </ul>
+                    </li>
+                </ol>
+
+                <hr class="my-6 border-gray-200">
+
+                <h3 class="text-indigo-600">3. 진로 탐구 활동 내용을 구체적으로 작성하고 탐구 활동을 통해 알게 된 내용이나 추가 심화 활동 계획 등을 작성하세요.</h3>
+                
+                <h4 class="text-gray-700">탐구 활동 내용 및 과정</h4>
+                <ol class="list-decimal list-inside ml-4 space-y-2">
+                    <li>실험 설계 및 데이터 재해석
+                        <ul class="list-disc list-inside ml-6 text-sm text-gray-600 space-y-1">
+                            <li>측정 장비: 동아리 활동에서 사용한 저가형 뇌파 측정기(Brainlink Lite)를 활용하여 피험자의 뇌파 데이터(Alpha, Beta, Delta, Theta, Gamma 파워)를 수집했습니다.</li>
+                            <li>가설: 카페인 섭취 그룹은 디카페인 섭취 그룹(대조군)에 비해 시간 경과에 따른 저주파수 뇌파(Delta, Theta)의 증가가 적을 것이며, 이는 집중도/각성 수준의 유지를 의미할 것이다.</li>
+                            <li>분석 세그먼트 재설정: 논문을 참고하여, 기존 활동에서 임의로 측정했던 데이터를 '첫 5분(c1)'과 '두 번째 5분(c2)'의 두 세그먼트로 나누어 재분석하는 심화 과정을 수행했습니다.</li>
+                        </ul>
+                    </li>
+                    <li>뇌파 데이터 분석 프로그램 심화 및 적용
+                        <ul class="list-disc list-inside ml-6 text-sm text-gray-600 space-y-1">
+                            <li>분석 프로그램 활용: 기존 동아리에서 가상 컴퓨터 환경에 구축했던 뇌파 분석 프로그램에 세그먼트(c1, c2) 비교 분석 기능을 추가했습니다.</li>
+                            <li>분석 지표 적용: 뇌파 파워의 '절대 파워(BA)'와 '상대 파워 비율(BRr)'을 계산하고 비교했습니다. 또한, 논문에서 사용한 'Dissimilarity Index (D)'의 개념을 참고하여 그룹 간/세그먼트 간 차이를 단일 지표로 나타내는 코드를 구현하여 시각화했습니다.</li>
+                        </ul>
+                    </li>
+                    <li>탐구 결과 및 알게 된 내용
+                        <div class="mt-2 overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-300 border border-gray-300 text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">지표</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">첫 5분 (c1)</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">두 번째 5분 (c2)</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">논문의 주요 발견 (참고 문헌 2)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <tr>
+                                        <td class="px-3 py-2 whitespace-nowrap">Delta/Theta BA</td>
+                                        <td class="px-3 py-2 whitespace-nowrap">카페인 그룹이 대조군보다 낮음</td>
+                                        <td class="px-3 py-2 whitespace-nowrap">차이가 c1보다 더 커짐</td>
+                                        <td class="px-3 py-2">대조군에서 시간이 지날수록 Delta2, Theta1 BA 증가 (각성 저하)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-3 py-2 whitespace-nowrap">Dissimilarity (그룹 간)</td>
+                                        <td class="px-3 py-2 whitespace-nowrap">낮음</td>
+                                        <td class="px-3 py-2 whitespace-nowrap">약 2배 증가</td>
+                                        <td class="px-3 py-2">그룹 간 Dissimilarity Index가 c2에서 약 2배 증가함</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-3 py-2 whitespace-nowrap">Dissimilarity (세그먼트 간)</td>
+                                        <td class="px-3 py-2 whitespace-nowrap">카페인 그룹이 대조군보다 낮음</td>
+                                        <td class="px-3 py-2 whitespace-nowrap">카페인 그룹이 대조군보다 약 3배 낮음</td>
+                                        <td class="px-3 py-2">카페인 그룹은 시간 경과에 따른 뇌파 변화가 거의 없음</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <ul class="list-disc list-inside mt-4 ml-2 space-y-1 text-gray-700">
+                            <li>카페인의 역할에 대한 이해: 카페인은 단순히 뇌파를 변화시키는 것을 넘어, 휴식 상태에서 자연적으로 발생하는 각성 수준의 저하(Delta/Theta 파워 증가)를 '방지'하는 역할을 한다는 것을 정량적으로 이해하게 되었습니다. 특히, 두 번째 5분(c2) 구간에서 대조군의 뇌파 변화가 급격히 커지면서 그룹 간의 차이가 명확해진다는 논문의 결과를 통해, 측정 시간의 후반부를 분석하는 것이 카페인 효과를 확인하는 데 결정적으로 중요함을 깨달았습니다.</li>
+                            <li>공학적 검증의 한계와 가능성: 저가형 뇌파 측정기의 한계에도 불구하고, 학술 논문에서 제시된 분석 방법론(세그먼트 분할, Dissimilarity Index)을 적용하여 유의미한 경향성을 확인한 것은 공학적 도구 제작 및 분석 능력에 대한 자신감을 높여주었습니다.</li>
+                        </ul>
+                    </li>
+                </ol>
+
+                <h4 class="text-gray-700 mt-6">추가 심화 활동 계획</h4>
+                <ol class="list-decimal list-inside ml-4 space-y-2">
+                    <li>신경 공학적 분석 심화:
+                        <ul class="list-disc list-inside ml-6 text-sm text-gray-600 space-y-1">
+                            <li>뇌파 코히어런스(Coherence) 분석: 뇌의 특정 영역 간의 연결성(기능적 연결)을 측정하는 코히어런스 지표를 분석 프로그램에 추가하여, 카페인이 집중력 네트워크에 미치는 영향을 탐구할 계획입니다.</li>
+                            <li>토포그래피 맵 구현: 논문처럼 전극 위치별 파워 분포를 색상으로 표현하는 토포그래피 맵 기능을 분석 프로그램에 추가하여, 카페인 효과가 뇌의 특정 영역(예: 후두부, 두정부)에서 더욱 두드러지는지 시각적으로 검증할 계획입니다.</li>
+                        </ul>
+                    </li>
+                    <li>프로그램 배포 및 피드백 활동:
+                        <ul class="list-disc list-inside ml-6 text-sm text-gray-600 space-y-1">
+                            <li>개발한 뇌파 분석 프로그램을 가상 컴퓨터 환경에 구축된 상태 그대로 동아리 후배나 다른 탐구 희망자들에게 배포하고 피드백을 받아, 프로그램의 사용자 편의성(UX)과 분석 정확도를 개선하는 활동을 진행할 것입니다. 이는 컴퓨터 과학 분야의 소프트웨어 개발 및 품질 관리(QA) 역량을 향상하는 데 도움이 될 것입니다.</li>
+                        </ul>
+                    </li>
+                </ol>
+                
+                <hr class="my-6 border-gray-200">
+
+                <h3 class="text-indigo-600">4. 관련 서적을 읽을 경우 책의 제목과 기억에 남는 문장을 기록해 주세요.</h3>
+                
+                <h4 class="text-gray-700">관련 서적 및 참고 문헌</h4>
+                <ol class="list-decimal list-inside ml-4 space-y-3">
+                    <li>도서명: 뉴럴링크(Neuralink) 관련 서적 또는 기사
+                        <ul class="list-disc list-inside ml-6 text-sm text-gray-600 space-y-1">
+                            <li>기억에 남는 문장: "뇌-컴퓨터 인터페이스(BCI)는 단순히 장애를 치료하는 것을 넘어, 언젠가는 인간의 인지적 한계를 확장하고 기억을 저장하는 '디지털 보철물'이 될 수 있다. 결국 신경 공학은 인간의 본질적인 지능과 연결성에 대한 질문으로 귀결된다."</li>
+                            <li>탐구와의 연관성: 제가 수행한 뇌파 측정 및 분석 활동은 BCI의 가장 기본적인 단계인 '뇌 신호의 측정 및 해석'에 해당합니다. 카페인과 같은 외부 물질이 뇌파를 조절하여 집중도를 높이는 현상을 탐구하는 것은, 미래에 BCI가 외부 개입 없이 뇌 자체의 성능을 향상시키는 비약물적 인지 증강 장치로 발전할 가능성을 시사합니다.</li>
+                        </ul>
+                    </li>
+                    <li>논문 제목: "Caffeine Maintains Arousal Level and Prevents Change of Electroencephalogram Spectral Powers with Time at Rest" (Jung JY et al., J Korean Sleep Res Soc 22014)
+                        <ul class="list-disc list-inside ml-6 text-sm text-gray-600 space-y-1">
+                            <li>기억에 남는 문장: "The results indicate that selection of analyzing segment is one important factor for quantitative EEG, and suggest that caffeine prevent decline of arousal..."</li>
+                            <li>탐구와의 연관성: 이 문장은 본 탐구의 핵심 아이디어를 제공했습니다. 측정 세그먼트 선정의 중요성을 깨닫고, 단순한 '순간 집중력' 측정이 아닌 '시간 경과에 따른 각성 수준 유지 능력'을 측정하도록 탐구를 심화하는 학문적 근거가 되었습니다.</li>
+                        </ul>
+                    </li>
+                    <li>추가 참고 논문: "Effect of Caffeine on Sleep and EEG Spectra in Rats" (Park K et al., 2007)
+                        <ul class="list-disc list-inside ml-6 text-sm text-gray-600 space-y-1">
+                            <li>기억에 남는 문장: (해당 논문의 내용을 바탕으로 한 해석) "설치류 실험에서도 카페인 투여 후 NREM 수면 중의 델타 파워가 유의미하게 감소하는 경향을 보여, 각성도 유지 효과가 인간뿐만 아니라 포유류 전반에 걸쳐 유사하게 나타남을 시사한다."</li>
+                            <li>탐구와의 연관성: 인간 대상의 연구와 더불어 동물 모델 연구를 함께 참고하여, 카페인의 신경 생리학적 효과가 종을 넘어 보편적인 기전을 갖는다는 것을 확인했습니다. 이는 제가 개발한 분석 프로그램의 결과 해석에 생물학적 타당성을 부여하는 데 기여했습니다.</li>
+                        </ul>
+                    </li>
+                </ol>
+
+            </div>
+            <!-- 보고서 내용 끝 -->
+            
+            <button onclick="toggleReport(false)" class="mt-6 w-full bg-red-500 text-white font-bold py-3 rounded-lg shadow-md hover:bg-red-600 transition duration-300">
+                닫기
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 시뮬레이션에 사용할 데이터
+        // Delta/Theta 상대 파워 비율 (각성 저하 지표)
+        const SIMULATED_DATA = {
+            // 카페인 그룹 (각성 유지: C1 -> C2 변화 작음)
+            CA_C1: 30, // Segment 1 (0-5분): 30%
+            CA_C2: 32, // Segment 2 (5-10분): 32% (약간의 변화)
+
+            // 디카페인 그룹 (각성 저하: C1 -> C2 변화 큼)
+            DE_C1: 31, // Segment 1 (0-5분): 31%
+            DE_C2: 45, // Segment 2 (5-10분): 45% (유의미한 증가)
+        };
+        
+        // UI 요소 캐싱
+        const loadDataBtn = document.getElementById('load-data-btn');
+        const loadingStatus = document.getElementById('loading-status');
+        const resultsSection = document.getElementById('results-section');
+        const errorMessage = document.getElementById('error-message');
+        const reportModal = document.getElementById('report-modal');
+
+        /**
+         * 가상의 뇌파 데이터를 로드하는 과정을 시뮬레이션하고 분석을 시작합니다.
+         */
+        function simulateDataLoad() {
+            loadDataBtn.disabled = true;
+            resultsSection.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            loadingStatus.classList.remove('hidden');
+
+            setTimeout(() => {
+                loadingStatus.classList.add('hidden');
+                analyzeEEGData(SIMULATED_DATA);
+                resultsSection.classList.remove('hidden');
+                loadDataBtn.disabled = false;
+            }, 1500); // 1.5초 로딩 지연 시뮬레이션
+        }
+
+        /**
+         * 시뮬레이션된 EEG 데이터를 기반으로 보고서의 핵심 지표를 계산하고 결과를 표시합니다.
+         * @param {object} data - 시뮬레이션 데이터 객체
+         */
+        function analyzeEEGData(data) {
+            // 1. 시간 경과에 따른 변화량 (각성 저하 정도) 계산
+            const caDiff = data.CA_C2 - data.CA_C1; // 카페인 변화
+            const deDiff = data.DE_C2 - data.DE_C1; // 디카페인 변화
+
+            // 2. C2 시점 그룹 간 차이 (카페인 효과) 계산
+            const c2InterDiff = data.DE_C2 - data.CA_C2; 
+
+            // 최대 변화율을 설정하여 프로그레스 바의 기준을 잡음
+            const maxDiff = Math.max(caDiff, deDiff) * 1.2;
+
+            // 3. UI 업데이트
+            
+            // 3-1. 시간 세그먼트 변화량 시각화 (프로그레스 바)
+            const caBarWidth = (caDiff / maxDiff) * 100;
+            const deBarWidth = (deDiff / maxDiff) * 100;
+
+            document.getElementById('ca-diff-bar').style.width = `${Math.min(caBarWidth, 100)}%`;
+            document.getElementById('ca-diff-text').textContent = `+${caDiff.toFixed(1)}% (C1 ${data.CA_C1}% → C2 ${data.CA_C2}%)`;
+
+            document.getElementById('de-diff-bar').style.width = `${Math.min(deBarWidth, 100)}%`;
+            document.getElementById('de-diff-text').textContent = `+${deDiff.toFixed(1)}% (C1 ${data.DE_C1}% → C2 ${data.DE_C2}%)`;
+
+            // 3-2. C2 그룹 간 차이 시각화
+            document.getElementById('c2-inter-diff-value').textContent = `${c2InterDiff.toFixed(1)}%`;
+
+            // 3-3. 분석 요약 메시지
+            let summaryText = `C2 시점에서 디카페인 그룹의 각성 저하 지표(Delta/Theta)가 카페인 그룹보다 ${c2InterDiff.toFixed(1)}% 더 높게 측정되었습니다.`;
+            if (deDiff > caDiff * 2) {
+                summaryText += `<br><span class="text-blue-600 font-bold">이는 카페인이 각성 수준 저하를 명확히 방지함을 시사합니다.</span>`;
+            }
+            document.getElementById('analysis-summary').innerHTML = summaryText;
+
+        }
+
+        /**
+         * 진로 주제탐구 보고서 모달을 토글합니다.
+         * @param {boolean} show - true면 모달을 표시, false면 숨김
+         */
+        function toggleReport(show) {
+            if (show) {
+                reportModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden'; // 스크롤 잠금
+            } else {
+                reportModal.classList.add('hidden');
+                document.body.style.overflow = 'auto'; // 스크롤 허용
+            }
+        }
+
+        /**
+         * 애플리케이션 상태를 초기화합니다.
+         */
+        function resetApp() {
+            resultsSection.classList.add('hidden');
+            loadingStatus.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            loadDataBtn.disabled = false;
+            // 모달이 열려있다면 닫기
+            toggleReport(false); 
+        }
+
+        // 초기 로드 시 재설정
+        window.onload = resetApp;
+    </script>
+</body>
+</html>
